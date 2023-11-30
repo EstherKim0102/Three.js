@@ -286,9 +286,11 @@ function animate() {
         const closestObject = intersects[0].object;
         const userData = findUserDataWithAnimations(closestObject);
         if (userData && userData.animations) {
+           
             const randomIndex = Math.floor(Math.random() * userData.animations.length);
             const animation = userData.animations[randomIndex];
             const action = userData.mixer.clipAction(animation);
+            action.reset();
             action.setLoop(THREE.LoopOnce);
             action.play(); 
         }
