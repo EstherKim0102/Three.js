@@ -10,6 +10,7 @@ let camera, scene, renderer, controls;
 let loader, mixers = [];
 let raycaster, mouse;
 let clock = new THREE.Clock();
+let loadedModels = [];
 
 let moveForward = false;
 let moveBackward = false;
@@ -19,6 +20,8 @@ let moveRight = false;
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
+
+let arrowHelper;
 
 
 init();
@@ -163,11 +166,9 @@ function init() {
     // Raycaster and mouse setup for model interaction
     raycaster = new THREE.Raycaster();
     raycaster.near = 0.1;
-    raycaster.far = 10; // Only detect collisions within 10 units from the camera
+    raycaster.far = 100; // Only detect collisions within 10 units from the camera
     mouse = new THREE.Vector2();
 
-    // Mouse event listener for model interaction
-    document.addEventListener('mousedown', onDocumentMouseDown, false);
 
     // ground
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshPhongMaterial({
@@ -204,6 +205,15 @@ function init() {
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize, false);
+
+
+    // Initialize ArrowHelper for visualizing the ray
+    const arrowDirection = new THREE.Vector3(0, 0, -1); // Default direction
+    const arrowColor = 0x00ff00; // Green color
+    const arrowLength = 10;
+    arrowHelper = new THREE.ArrowHelper(arrowDirection, camera.position, arrowLength, arrowColor);
+    scene.add(arrowHelper);
+
 }
 //end of init
 
@@ -221,6 +231,14 @@ function loadModel(modelData) {
 
         scene.add(model);
 
+        loadedModels.push(model);
+
+        // Add a bounding box. 
+        // comment out for production version
+        const bbox = new THREE.Box3().setFromObject(model);
+        const bboxHelper = new THREE.BoxHelper(model, 0xff0000); // Red color for the bounding box
+        scene.add(bboxHelper);
+
         if (gltf.animations.length) {
             const mixer = new THREE.AnimationMixer(model);
             mixers.push(mixer);
@@ -230,35 +248,6 @@ function loadModel(modelData) {
             model.userData.mixer = mixer;
         }
     });
-}
-
-function onDocumentMouseDown(event) {
-    event.preventDefault();
-
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scene.children, true);
-
-    if (intersects.length > 0) {
-        const clickedObject = intersects[0].object;
-
-
-        //TODO: look for a property called userData, if not found on this object then look for the `parent` and seek it on the parent, do this recursively untill you find the userData.
-        const userData = findUserDataWithAnimations(clickedObject);
-
-
-        if (userData && userData.animations) {
-            console.log(userData);
-            const randomIndex = Math.floor(Math.random() * userData.animations.length);
-            const animation = userData.animations[randomIndex];
-            const action = userData.mixer.clipAction(animation);
-            action.setLoop(THREE.LoopOnce);
-            action.play();
-        }
-    }
 }
 
 function findUserDataWithAnimations(obj) {
@@ -279,6 +268,32 @@ function onWindowResize() {
 
 function animate() {
     requestAnimationFrame(animate);
+
+
+    // Update raycaster direction to match the camera's forward direction
+    const cameraDirection = camera.getWorldDirection(new THREE.Vector3());
+    raycaster.set(camera.position, cameraDirection);
+
+    // Update ArrowHelper to visualize the ray
+    arrowHelper.setDirection(cameraDirection);
+    arrowHelper.position.copy(camera.position);
+
+    // Perform raycasting for collision detection
+    const intersects = raycaster.intersectObjects(loadedModels, true);
+
+
+    if (intersects.length > 0) {
+        const closestObject = intersects[0].object;
+        const userData = findUserDataWithAnimations(closestObject);
+        if (userData && userData.animations) {
+            const randomIndex = Math.floor(Math.random() * userData.animations.length);
+            const animation = userData.animations[randomIndex];
+            const action = userData.mixer.clipAction(animation);
+            action.setLoop(THREE.LoopOnce);
+            action.play(); 
+        }
+    }
+    
 
 
     const time = performance.now();
